@@ -98,8 +98,8 @@ def write_fft(fft_file_path, log2_n_samples):
                         # no optimization
                         # tre = cos[omega_index] * samples_re[k + j + power] - sin[omega_index] * samples_im[k + j + power]
                         # tim = sin[omega_index] * samples_re[k + j + power] + cos[omega_index] * samples_im[k + j + power]
-                        block_lines.append(f"int16_t re_t = {"+" if cos_val > 0 else "-"} approx_mul_shift16({re_t_val_name}, {abs(cos_val)}) {"-" if sin_val > 0 else "+"} {"0" if im_is_zero[t_index] else f"approx_mul_shift16({im_t_val_name}, {abs(sin_val)})"};")
-                        block_lines.append(f"int16_t im_t = {"+" if sin_val > 0 else "-"} approx_mul_shift16({re_t_val_name}, {abs(sin_val)}) {"+" if cos_val > 0 else "-"} {"0" if im_is_zero[t_index] else f"approx_mul_shift16({im_t_val_name}, {abs(cos_val)})"};")
+                        block_lines.append(f"int16_t re_t = {'+' if cos_val > 0 else '-'} approx_mul_shift16({re_t_val_name}, {abs(cos_val)}) {'-' if sin_val > 0 else '+'} {'0' if im_is_zero[t_index] else f'approx_mul_shift16({im_t_val_name}, {abs(sin_val)})'};")
+                        block_lines.append(f"int16_t im_t = {'+' if sin_val > 0 else '-'} approx_mul_shift16({re_t_val_name}, {abs(sin_val)}) {'+' if cos_val > 0 else '-'} {'0' if im_is_zero[t_index] else f'approx_mul_shift16({im_t_val_name}, {abs(cos_val)})'};")
                         re_t_is_zero = False
                         im_t_is_zero = False
 
@@ -114,15 +114,15 @@ def write_fft(fft_file_path, log2_n_samples):
 
                     # samples[k + j] = u + t
                     # samples[k + j + power] = u - t
-                    block_lines.append(f"re{u_index} = re_u + {"0" if re_t_is_zero else "re_t"};")
-                    block_lines.append(f"re{t_index} = re_u - {"0" if re_t_is_zero else "re_t"};")
+                    block_lines.append(f"re{u_index} = re_u + {'0' if re_t_is_zero else 're_t'};")
+                    block_lines.append(f"re{t_index} = re_u - {'0' if re_t_is_zero else 're_t'};")
                     if not im_u_is_zero or not im_t_is_zero:
-                        block_lines.append(f"im{u_index} = {"0" if im_u_is_zero else "im_u"} + {"0" if im_t_is_zero else "im_t"};")
+                        block_lines.append(f"im{u_index} = {'0' if im_u_is_zero else 'im_u'} + {'0' if im_t_is_zero else 'im_t'};")
                         if im_is_zero[u_index]:
                             # Declare imaginary before block
                             write_lines(f, current_ident, f"int16_t im{u_index};")
                             im_is_zero[u_index] = False
-                        block_lines.append(f"im{t_index} = {"0" if im_u_is_zero else "im_u"} - {"0" if im_t_is_zero else "im_t"};")
+                        block_lines.append(f"im{t_index} = {'0' if im_u_is_zero else 'im_u'} - {'0' if im_t_is_zero else 'im_t'};")
                         if im_is_zero[t_index]:
                             # Declare imaginary before block
                             write_lines(f, current_ident, f"int16_t im{t_index};")
@@ -139,7 +139,7 @@ def write_fft(fft_file_path, log2_n_samples):
             write_lines(f,
                         current_ident,
                         f"samples[{2 * i}] = re{i};",
-                        f"samples[{2 * i + 1}] = {"0" if im_is_zero[i] else f"im{i}"};")
+                        f"samples[{2 * i + 1}] = {'0' if im_is_zero[i] else f'im{i}'};")
 
         # End function
         current_ident -= ident_size
