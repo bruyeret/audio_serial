@@ -8,3 +8,4 @@
 # Works with python 3.12.2 with numpy
 .venv
 include/unrolled_fft.h
+dissassembly.asm

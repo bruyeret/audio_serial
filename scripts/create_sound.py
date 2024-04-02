@@ -34,14 +34,17 @@ def main_harmonics():
     base_freq = 1000
     phases = np.zeros(n_freq)
     amplitudes = np.ones(n_freq)
-    duration = 5
+    duration = 0.00225
     play = True
-
 
     amplitudes[0] = 0
     amplitudes = amplitudes / np.sum(amplitudes)
     frequencies = base_freq * np.arange(0, n_freq, 1)
-    audio = to_audio(frequencies, amplitudes, phases, duration)
+    sound = to_audio(frequencies, amplitudes, phases, duration)
+    interval = to_audio([], [], [], 0.003 - duration)
+    silence = to_audio([], [], [], 1)
+    burst = np.array([32767, -32768], dtype=np.int16)
+    audio = np.hstack([silence, *([burst, sound, interval] * 5), silence])
     
     if play:
         play_audio(audio)

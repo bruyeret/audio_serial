@@ -70,11 +70,14 @@ def from_samples(raw_array):
     return spectrum
 
 def read_serial_line():
-    ser.read_all()
-    ser.read_until(b"\n")
-    buffer = ser.read_until(b"\n")
+    line_max_size = 15 * n_displayed_freq
+    if ser.in_waiting > 2 * line_max_size:
+        print("Clear buffer")
+        ser.read(ser.in_waiting - line_max_size)
+        ser.read_until(b"\n")
     while True:
         try:
+            buffer = ser.read_until(b"\n")
             raw_array = [int(s) for s in buffer.decode().split(", ")[:-1]]
             return from_samples(raw_array) if use_raw_samples else from_complex(raw_array)
         except:

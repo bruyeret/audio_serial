@@ -33,3 +33,20 @@ There are no command line arguments yet, see the beginning of `main_harmonics` f
 The script `fft_plot.py` listens to a COM port and shows the output of this COM port in a special form.
 The COM port should output numbers separated by commas. The end of the line should be a comma and a newline.
 There are no command line arguments yet, see the beginning of the file for settings.
+
+### Dissassemble the firmware
+
+You need `objdump` that should be located in the directory:
+```sh
+${HOME}/.platformio/packages/toolchain-atmelavr/avr/bin
+```
+
+Compile in release and run this command to dissassemble the firmware:
+```sh
+objdump -S .pio/build/release/firmware.elf > dissassembly.asm
+```
+
+To get the source code mixed with assembly, but without optimizations, you can also compile in debug and run:
+```sh
+objdump -S -I include .pio/build/debug/firmware.elf > dissassembly.asm
+```

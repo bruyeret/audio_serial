@@ -3,32 +3,54 @@
 
 #define ADC_PIN 0
 
+enum SamplingState : uint8_t {
+    FIND_ZERO,
+    FIND_NON_ZERO,
+    WAIT,
+    DATA,
+};
+// Only used in ISR, no need to be volatile
+SamplingState state;
+volatile bool is_buffer_read = true;
+
 // 125 samples * 8 (prescaler) at 16MHz => 16kHz
 // 31.25 samples * 8 (prescaler) at 16MHz => 64kHz
-// For my board, using 124 and 31 instead gives better results
+// For my board, using 124 and 31 instead gives better results (clock accuracy issues)
 
-// constexpr uint8_t number_of_zero_samples = 4 * 2; // Equivalent to 2 samples at 16kHz
-// constexpr uint8_t zero_samples_period = 31; // 64kHz
 
-// constexpr uint8_t number_of_wait_samples = 6;
-// constexpr uint8_t wait_samples_period = 124; // 16kHz
+// ZERO state variables
+constexpr uint8_t number_of_zero_samples = 4 * 2; // Equivalent to 2 samples at 16kHz
+constexpr uint8_t zero_samples_period = 31; // 64kHz
+constexpr uint16_t zero_threshold = 8; // Absolute difference with 512
+uint8_t remaining_zero_samples;
 
+// NON ZERO state variables
+constexpr uint8_t non_zero_samples_period = zero_samples_period;
+constexpr uint16_t non_zero_threshold = 10; // Absolute difference with 512
+
+// WAIT state variables
+constexpr uint8_t number_of_wait_samples = 2;
+constexpr uint8_t wait_samples_period = 124; // 16kHz
+uint8_t remaining_wait_samples;
+
+
+// DATA state variables
 constexpr uint8_t log2_number_of_data_samples = 5; // 2^5 == 32
-constexpr uint8_t number_of_data_samples = 1 << log2_number_of_data_samples; // 2^(log2(n)) = n
+constexpr uint8_t number_of_data_samples = 1 << log2_number_of_data_samples; // log2(32) = 5
 constexpr uint8_t data_samples_period = 124; // 16kHz
-
-// Sampling variables
-volatile uint8_t sample_buffer_idx = 0;
+// Buffer to contain the samples data
 int16_t sample_buffer_0[number_of_data_samples];
 int16_t sample_buffer_1[number_of_data_samples];
-// Points to sample_buffer_0 or sample_buffer_1
-int16_t *sample_buffer = sample_buffer_0;
+// Points to sample_buffer_0 or sample_buffer_1 alternatively
+int16_t *volatile sample_buffer = sample_buffer_0;
+volatile uint8_t sample_buffer_idx;
 
 
 inline void set_timer0_period(uint8_t samples)
 {
     OCR0A = samples;
 }
+
 
 inline void setup_timer0()
 {
@@ -39,6 +61,7 @@ inline void setup_timer0()
     TIMSK0 = (1 << OCIE0A); // Enable an empty interrupt to trigger conversion
     TCNT0 = 0;              // Reset counter
 }
+
 
 inline void setup_adc()
 {
@@ -55,47 +78,116 @@ inline void setup_adc()
              (1 << ADTS0);
 }
 
+
 inline int16_t *get_samples()
 {
-    // Wait for sampling to be done
-    while (sample_buffer_idx < number_of_data_samples) {}
-
-    // Swap buffers
-    auto filled_buffer = sample_buffer;
-    auto other_buffer = filled_buffer == sample_buffer_0 ? sample_buffer_1 : sample_buffer_0;
-    sample_buffer = other_buffer;
-
-    // Reseting index will start sampling
-    sample_buffer_idx = 0;
-
-    return filled_buffer;
+    // Don't read the same buffer twice
+    // Wait for sampling to be done if the current buffer is being written to
+    while (is_buffer_read || sample_buffer_idx < number_of_data_samples) {}
+    is_buffer_read = true;
+    // Return the buffer that contains the samples
+    return sample_buffer;
 }
+
+
+inline void setup_new_state(SamplingState newState)
+{
+    state = newState;
+    switch (newState)
+    {
+    case SamplingState::FIND_ZERO:
+        set_timer0_period(zero_samples_period);
+        remaining_zero_samples = number_of_zero_samples;
+        break;
+    
+    case SamplingState::FIND_NON_ZERO:
+        set_timer0_period(non_zero_samples_period);
+        break;
+
+    case SamplingState::WAIT:
+        set_timer0_period(wait_samples_period);
+        remaining_wait_samples = number_of_wait_samples;
+        break;
+
+    case SamplingState::DATA:
+        set_timer0_period(data_samples_period);
+        // First, reset buffer index
+        sample_buffer_idx = 0;
+        // Now swap buffers
+        auto filled_buffer = sample_buffer;
+        auto other_buffer = filled_buffer == sample_buffer_0 ? sample_buffer_1 : sample_buffer_0;
+        sample_buffer = other_buffer;
+        break;
+    }
+}
+
 
 void setup()
 {
     Serial.begin(115200);
     Serial.println("Starting program");
     Serial.flush();
+
     setup_timer0();
-    set_timer0_period(data_samples_period);
     setup_adc();
+    setup_new_state(SamplingState::FIND_ZERO);
 }
+
 
 void loop()
 {
     auto buffer = get_samples(); // Wait for some samples
     approx_fft32(buffer);
 
-    for (uint8_t i = 0; i < number_of_data_samples; ++i)
+    for (uint8_t i = 0; i < number_of_data_samples; i += 2)
     {
-        Serial.print(buffer[i]);
+        int32_t re = static_cast<int32_t>(buffer[i]);
+        int32_t im = static_cast<int32_t>(buffer[i + 1]);
+        int32_t norm = re * re + im * im;
+        Serial.print(norm);
         Serial.print(", ");
     }
     Serial.println();
 }
 
-// ADC conversion done interrupt
-ISR(ADC_vect)
+
+inline void zero_sampling()
+{
+    uint16_t sample = ADC;
+    if (sample > 512 - zero_threshold && sample < 512 + zero_threshold)
+    {
+        // Sampled a zero
+        if (--remaining_zero_samples == 0)
+        {
+            setup_new_state(SamplingState::FIND_NON_ZERO);
+        }
+    } else {
+        // Not a zero: reset count
+        remaining_zero_samples = number_of_zero_samples;
+    }
+}
+
+
+inline void non_zero_sampling()
+{
+    uint16_t sample = ADC;
+    if (sample <= 512 - non_zero_threshold || sample >= 512 + non_zero_threshold)
+    {
+        setup_new_state(SamplingState::WAIT);
+    }
+}
+
+
+inline void wait_sampling()
+{
+    if (--remaining_wait_samples == 0)
+    {
+        setup_new_state(SamplingState::DATA);
+    }
+}
+
+
+inline void data_sampling()
 {
     if (sample_buffer_idx < number_of_data_samples)
     {
@@ -113,8 +205,37 @@ ISR(ADC_vect)
             (shift >= 0) ?
                 offseted_sample << shift :
                 offseted_sample >> -shift;
+    } else {
+        // Buffer has been updated: it has not been read yet
+        is_buffer_read = false;
+        setup_new_state(SamplingState::FIND_ZERO);
     }
 }
+
+
+// ADC conversion done interrupt
+ISR(ADC_vect)
+{
+    switch (state)
+    {
+    case SamplingState::FIND_ZERO:
+        zero_sampling();
+        break;
+
+    case SamplingState::FIND_NON_ZERO:
+        non_zero_sampling();
+        break;
+    
+    case SamplingState::WAIT:
+        wait_sampling();
+        break;
+    
+    case SamplingState::DATA:
+        data_sampling();
+        break;
+    }
+}
+
 
 // Empty interrupt for TIMER0_COMPA, but interrupt enabled to trigger ADC
 EMPTY_INTERRUPT(TIMER0_COMPA_vect);
