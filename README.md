@@ -45,8 +45,16 @@ Compile in release and run this command to dissassemble the firmware:
 ```sh
 objdump -S .pio/build/release/firmware.elf > dissassembly.asm
 ```
+Or using Windows Powershell, to avoid using UTF16-LE encoding:
+```sh
+objdump -S .pio/build/release/firmware.elf | Out-File -encoding ASCII dissassembly.asm
+```
 
 To get the source code mixed with assembly, but without optimizations, you can also compile in debug and run:
 ```sh
 objdump -S -I include .pio/build/debug/firmware.elf > dissassembly.asm
+```
+Or alternatively using Windows Powershell:
+```sh
+objdump -S -I include .pio/build/debug/firmware.elf | Out-File -encoding ASCII dissassembly.asm
 ```
