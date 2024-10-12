@@ -97,7 +97,7 @@ instruction_cycles = {
 def main():
     with open("dissassembly.asm", "r") as file:
         # Find the beginning of the function
-        function_pattern = "[a-f0-9]* <.*approx_fft32.*>:"
+        function_pattern = "[a-f0-9]* <.*approx_fft.*>:"
         function_prog = re.compile(function_pattern)
         for line in file:
             if function_prog.match(line) is not None:

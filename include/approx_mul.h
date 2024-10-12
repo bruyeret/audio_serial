@@ -3,6 +3,7 @@
 // Compute (x * y) >> 16
 // This multiplication can be off by one (for performance reasons)
 // Useful when x represent an int16 and y represent the fixed-point fractional number y/(2^16)
+__attribute__((always_inline))
 inline int16_t approx_mul_shift16(int16_t x, uint16_t y)
 {
     int16_t value;

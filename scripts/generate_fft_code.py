@@ -147,4 +147,4 @@ def write_fft(fft_file_path, log2_n_samples):
 
 if __name__ == "__main__":
     header_path = path.join(path.dirname(__file__), "..", "include", "unrolled_fft.h")
-    write_fft(header_path, 5)
+    write_fft(header_path, 6)

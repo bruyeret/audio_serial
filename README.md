@@ -58,3 +58,10 @@ Or alternatively using Windows Powershell:
 ```sh
 objdump -S -I include .pio/build/debug/firmware.elf | Out-File -encoding ASCII dissassembly.asm
 ```
+
+The number of instructions for the compiled FFT can be counted using the python script.
+If the number of instruction found is 0, this is because the fft has been inlined and can't be found in the dissasembly.
+To avoid this, you can add an attribute before the fft in `unrolled_fft.h`: `__attribute__ ((noinline))`.
+```sh
+python ./scripts/count_instructions.py
+```

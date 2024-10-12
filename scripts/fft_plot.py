@@ -22,9 +22,9 @@ from numpy.fft import fft
 
 
 # Choose COM port and baud rate
-ser = serial.Serial("COM11", 115200)
+ser = serial.Serial("COM3", 115200)
 # Number of frequencies to display
-n_displayed_freq = 16
+n_displayed_freq = 32
 # Fundamental frequency (for display only)
 base_freq = 500
 # Choose if the array of numbers represents:
