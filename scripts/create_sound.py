@@ -32,13 +32,17 @@ def play_audio(audio):
 def main_harmonics():
     play = True
 
-    frequencies = 0.99 * np.arange(500, 16000, 1000)
-    amplitudes = np.ones(frequencies.shape)
-    amplitudes /= np.sum(amplitudes)
+    frequencies = 0.99 * np.array([500, 1500, 2000, 2500, 3000])
     phases = np.zeros(frequencies.shape)
-    duration = 5
-    
-    audio = to_audio(frequencies, amplitudes, phases, duration)
+    duration = 1
+
+    audios = []
+    for value in (ord('A'), 256 - ord('A')):
+        amplitudes = np.array([3, (value // 64) % 4, (value // 16) % 4, (value // 4) % 4, (value // 1) % 4], dtype=np.float64)
+        amplitudes /= np.sum(amplitudes)
+        audio = to_audio(frequencies, amplitudes, phases, duration)
+        audios.append(audio)
+    audio = np.hstack(audios)
     
     if play:
         play_audio(audio)

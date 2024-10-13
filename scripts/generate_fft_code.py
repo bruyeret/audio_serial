@@ -32,7 +32,8 @@ def write_fft(fft_file_path, log2_n_samples):
 
         write_lines(f,
                     current_ident,
-                    "#include \"approx_mul.h\"",
+                    '#pragma once',
+                    "#include \"custom_mul.h\"",
                     "",
                     f"void approx_fft{n_samples}(int16_t *samples)",
                     "{")

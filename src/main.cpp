@@ -1,3 +1,4 @@
+#include "custom_mul.h"
 #include "unrolled_fft.h"
 #include "simple_uart.h"
 #include <avr/io.h>
@@ -26,6 +27,15 @@ int16_t sample_buffer_1[number_of_data_samples];
 int16_t *volatile sample_buffer = sample_buffer_0;
 // Index of the next sample in the sample buffer
 volatile uint8_t sample_buffer_idx = 0;
+
+// Function used to compute squared magnitude of a frequency given buffer and frequency index
+
+inline uint32_t get_buffer_squared_value(int16_t *buffer, uint8_t frequency_index)
+{
+    uint8_t real_part_index = 2 * frequency_index;
+    uint8_t imag_part_index = real_part_index + 1;
+    return square(buffer[real_part_index]) + square(buffer[imag_part_index]);
+}
 
 inline void setup_timer0()
 {
@@ -83,13 +93,58 @@ void loop()
     // Compute fft
     approx_fft64(filled_buffer);
 
-    // Print the computed fft
-    for (uint8_t sample_idx = 0; sample_idx < number_of_data_samples; ++sample_idx)
+    // // Check square
+    // USART_PrintString("START");
+    // for (int16_t i = -32768; i < 32767; ++i) {
+    //     uint32_t val = square(i);
+    //     USART_SendByte((val >> 0) & 0xFF);
+    //     USART_SendByte((val >> 8) & 0xFF);
+    //     USART_SendByte((val >> 16) & 0xFF);
+    //     USART_SendByte((val >> 24) & 0xFF);
+    // }
+    // uint32_t val = square((int16_t)32767);
+    // USART_SendByte((val >> 0) & 0xFF);
+    // USART_SendByte((val >> 8) & 0xFF);
+    // USART_SendByte((val >> 16) & 0xFF);
+    // USART_SendByte((val >> 24) & 0xFF);
+    // while (true) {}
+
+    // Get ref value squared
+    constexpr uint8_t reference_frequency_index = 1;
+    uint32_t reference_value_squared = get_buffer_squared_value(filled_buffer, reference_frequency_index);
+    // Deduce limits
+    uint32_t first_limit = reference_value_squared / 36;
+    uint32_t second_limit = reference_value_squared / 4;
+    uint32_t third_limit = 25 * reference_value_squared / 36;
+    // Compute first value
+    constexpr uint8_t input_value_frequency_index = 3;
+    uint8_t input_value = 0;
+    for (uint8_t frequency_index = input_value_frequency_index; frequency_index < input_value_frequency_index + 4; ++frequency_index)
     {
-        USART_PrintInt16(filled_buffer[sample_idx]);
-        USART_PrintString(", ");
+        uint32_t frequency_value_squared = get_buffer_squared_value(filled_buffer, frequency_index);
+        input_value <<= 1;
+        if (frequency_value_squared > second_limit) {
+            input_value |= 1;
+            input_value <<= 1;
+            if (frequency_value_squared > third_limit) {
+                input_value |= 1;
+            }
+        } else {
+            input_value <<= 1;
+            if (frequency_value_squared > first_limit) {
+                input_value |= 1;
+            }
+        }
     }
-    USART_PrintString("\n");
+    USART_SendByte(input_value);
+
+    // // Print the computed fft
+    // for (uint8_t sample_idx = 0; sample_idx < number_of_data_samples; ++sample_idx)
+    // {
+    //     USART_PrintInt16(filled_buffer[sample_idx]);
+    //     USART_PrintString(", ");
+    // }
+    // USART_PrintString("\n");
 }
 
 // ADC conversion done interrupt
