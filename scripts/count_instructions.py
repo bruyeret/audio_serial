@@ -92,12 +92,26 @@ instruction_cycles = {
     "PUSH": 2,
     "POP": 2,
     "RET": 4,
+    "RETI": 4,
+    "CP": 1,
+    "CPC": 1,
+    "CPI": 1,
 }
 
 def main():
+    # # FFT
+    # last_instruction = "RET"
+    # function_name_pattern = ".*approx_fft.*"
+
+    # ADC conversion done interrupt
+    last_instruction = "RETI"
+    function_name_pattern = "__vector_21"
+    # In this function, the branch instruction is an early return
+    instruction_cycles["BRCC"] = 1
+
     with open("dissassembly.asm", "r") as file:
         # Find the beginning of the function
-        function_pattern = "[a-f0-9]* <.*approx_fft.*>:"
+        function_pattern = f"[a-f0-9]* <{function_name_pattern}>:"
         function_prog = re.compile(function_pattern)
         for line in file:
             if function_prog.match(line) is not None:
@@ -105,7 +119,7 @@ def main():
                 break
         
         # Get the number of occurence for each instructions
-        instruction_pattern = "       \t([a-z]*)"
+        instruction_pattern = "\t.*\t([a-z]*)(\t|$)"
         instruction_prog = re.compile(instruction_pattern)
         instruction_counts = dict()
         for line in file:
@@ -115,7 +129,7 @@ def main():
             instruction = match.group(1).upper()
             new_count = instruction_counts.get(instruction, 0) + 1
             instruction_counts[instruction] = new_count
-            if instruction == "RET":
+            if instruction == last_instruction:
                 break
 
     # Count total cycles and instructions

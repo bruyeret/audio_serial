@@ -113,14 +113,15 @@ void setup()
 
 void loop()
 {
+    // We will use the sample buffer that is being filled with samples
+    auto filled_buffer = sample_buffer;
+    // The other buffer can be used for sampling while we work on the filled buffer
+    auto other_buffer = (filled_buffer == sample_buffer_0) ? sample_buffer_1 : sample_buffer_0;
+
     // Wait until the sample buffer is full
     while (sample_buffer_idx < number_of_data_samples)
         ;
 
-    // We will use the sample buffer that is now filled with samples
-    auto filled_buffer = sample_buffer;
-    // The other buffer can be used for sampling while we work on the filled buffer
-    auto other_buffer = (filled_buffer == sample_buffer_0) ? sample_buffer_1 : sample_buffer_0;
     // First, set the sample_buffer that will be used by interrupt
     sample_buffer = other_buffer;
     // Then, set the index to 0 to start sampling
@@ -155,8 +156,9 @@ void loop()
 // ADC conversion done interrupt
 ISR(ADC_vect)
 {
+    uint8_t captured_sample_buffer_idx = sample_buffer_idx;
     // Don't sample if the index is out of bounds
-    if (sample_buffer_idx >= number_of_data_samples)
+    if (captured_sample_buffer_idx >= number_of_data_samples)
     {
         return;
     }
@@ -168,11 +170,16 @@ ISR(ADC_vect)
     //   [-2^(9 + shift + log2_n_samples), 2^(9 + shift + log2_n_samples)[
     // To get maximum accuracy without overflow, we can use: 9 + shift + log2_n_samples = 15
     // So: shift = 6 - log2_n_samples
-    constexpr int8_t shift = 6 - log2_number_of_data_samples;
+    constexpr int8_t best_shift_no_overflow = 6 - log2_number_of_data_samples;
+    // To that we add a shift offset, when the volume is too low, at the cost of a risk of overflow
+    constexpr uint8_t shift_offset = 4;
+    constexpr int8_t shift = best_shift_no_overflow + shift_offset;
     // Ternary operator should be optimised out by the compiler
     int16_t offseted_sample = ADC - 512;
-    sample_buffer[sample_buffer_idx++] =
+    sample_buffer[captured_sample_buffer_idx] =
         (shift >= 0) ? offseted_sample << shift : offseted_sample >> -shift;
+
+    sample_buffer_idx = ++captured_sample_buffer_idx;
 }
 
 // Empty interrupt for TIMER0_COMPA, but interrupt enabled to trigger ADC

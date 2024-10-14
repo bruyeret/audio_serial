@@ -10,19 +10,19 @@ from numpy.fft import fft
 # This script expects this kind of output from the COM port, with:
 # - If outputing raw samples: n = n_displayed_freq
 # - If outputing an FFT: n = 2 * n_displayed_freq
-#
-# for (uint8_t i = 0; i < n; ++i) {
-#     Serial.print(array[i]);
-#     Serial.print(", ");
+
+# for (uint8_t i = 0; i < number_of_data_samples; ++i) {
+#     USART_PrintInt16(filled_buffer[i]);
+#     USART_PrintString(", ");
 # }
-# Serial.println();
-#
+# USART_PrintString("\n");
+
 # Example of a line of output with n = 8:
 # 234, 23, 5, -23, -90, 197, 44, 72, 
 
 
 # Choose COM port and baud rate
-ser = serial.Serial("COM3", 115200)
+ser = serial.Serial("COM8", 115200)
 # Number of frequencies to display
 n_displayed_freq = 32
 # Fundamental frequency (for display only)
@@ -91,7 +91,7 @@ def animate(frame):
     ref_frequency = x[ref_idx]
 
     norms = np.absolute(complexes)
-    norm_range = (0, max(2000, *norms))
+    norm_range = (0, max(5000, *norms))
     ax_norm.clear()
     ax_norm.set_ylim(*norm_range)
     ax_norm.scatter(x, norms, color=color)
@@ -99,7 +99,7 @@ def animate(frame):
 
     phases = np.angle(complexes)
     phase_range = (0, two_pi)
-    phases = (norms > 100) * np.mod(phases - phases[ref_idx] + np.pi, two_pi)
+    phases = (norms > 400) * np.mod(phases - phases[ref_idx] + np.pi, two_pi)
     ax_phase.clear()
     ax_phase.scatter(x, phases, color=color)
     ax_phase.set_ylim(*phase_range)
