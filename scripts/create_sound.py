@@ -32,17 +32,45 @@ def play_audio(audio):
 def main_harmonics():
     play = True
 
-    frequencies = 0.99 * np.array([500, 1500, 2000, 2500, 3000])
+    # Reference frequency (index 1, amplitude 3)
+    frequencies = [1]
+    amplitudes = [3]
+
+    # Constant that are shared with the arduino code
+    frequency_index_start = 3
+    frequency_index_stride = 5
+    number_of_input_values = 5
+
+    # Add input values frequencies and amplitudes
+    values = list(range(ord('A'), ord('A') + number_of_input_values))
+    assert(len(values) == number_of_input_values)
+    current_frequency = frequency_index_start
+    for value in values:
+        for i in range(3, -1, -1):
+            amplitudes.append((value // (4 ** i)) % 4)
+            frequencies.append(current_frequency)
+            current_frequency += 1
+        current_frequency += frequency_index_stride - 4
+
+    # Convert to numpy arrays
+    amplitudes = np.array(amplitudes, dtype=np.float64)
+    frequencies = np.array(frequencies, dtype=np.float64)
+
+    # Divide amplitude by maximum possible amplitude
+    amplitudes /= 3 * len(amplitudes)
+
+    # Multiply frequency indices by base frequency and adjut using an empirical ratio
+    frequencies *= 0.99 * 500
+
+    # Get the audio signal
     phases = np.zeros(frequencies.shape)
     duration = 1
+    audio = to_audio(frequencies, amplitudes, phases, duration)
 
-    audios = []
-    for value in (ord('A'), 256 - ord('A')):
-        amplitudes = np.array([3, (value // 64) % 4, (value // 16) % 4, (value // 4) % 4, (value // 1) % 4], dtype=np.float64)
-        amplitudes /= np.sum(amplitudes)
-        audio = to_audio(frequencies, amplitudes, phases, duration)
-        audios.append(audio)
-    audio = np.hstack(audios)
+    # Add some zero padding before and after the audio
+    empty_array = np.array([])
+    zero_padding = to_audio(empty_array, empty_array, empty_array, 0.5)
+    audio = np.hstack((zero_padding, audio, zero_padding))
     
     if play:
         play_audio(audio)

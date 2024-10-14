@@ -37,6 +37,42 @@ inline uint32_t get_buffer_squared_value(int16_t *buffer, uint8_t frequency_inde
     return square(buffer[real_part_index]) + square(buffer[imag_part_index]);
 }
 
+// Get an 8 bit value from 4 consecutive frequencies in the input spectrum
+// frequency_index: the first frequency of the 4 consecutive frequencies holding the value
+// spectrum_buffer: the input spectrum [re0, im0, re1, im1, ...]
+// square_limit_1, square_limit_2, square_limit_3: square of the magnitudes used to get a single base 4 digit per frequency:
+//      - square_magnitude <= square_limit_1: frequency represents the digit 0
+//      - square_limit_1 < square_magnitude <= square_limit_2: frequency represents the digit 1
+//      - square_limit_2 < square_magnitude <= square_limit_3: frequency represents the digit 2
+//      - square_limit_3 < square_magnitude: frequency represents the digit 3
+inline uint8_t get_input_value_from_spectrum(uint8_t first_frequency_index, int16_t *spectrum_buffer, uint32_t square_limit_1, uint32_t square_limit_2, uint32_t square_limit_3)
+{
+    uint8_t input_value = 0;
+    for (uint8_t frequency_index = first_frequency_index; frequency_index < first_frequency_index + 4; ++frequency_index)
+    {
+        uint32_t frequency_value_squared = get_buffer_squared_value(spectrum_buffer, frequency_index);
+        input_value <<= 1;
+        if (frequency_value_squared > square_limit_2)
+        {
+            input_value |= 1;
+            input_value <<= 1;
+            if (frequency_value_squared > square_limit_3)
+            {
+                input_value |= 1;
+            }
+        }
+        else
+        {
+            input_value <<= 1;
+            if (frequency_value_squared > square_limit_1)
+            {
+                input_value |= 1;
+            }
+        }
+    }
+    return input_value;
+}
+
 inline void setup_timer0()
 {
     TCCR0A = (1 << WGM01); // CTC on OCR0A
@@ -93,22 +129,6 @@ void loop()
     // Compute fft
     approx_fft64(filled_buffer);
 
-    // // Check square
-    // USART_PrintString("START");
-    // for (int16_t i = -32768; i < 32767; ++i) {
-    //     uint32_t val = square(i);
-    //     USART_SendByte((val >> 0) & 0xFF);
-    //     USART_SendByte((val >> 8) & 0xFF);
-    //     USART_SendByte((val >> 16) & 0xFF);
-    //     USART_SendByte((val >> 24) & 0xFF);
-    // }
-    // uint32_t val = square((int16_t)32767);
-    // USART_SendByte((val >> 0) & 0xFF);
-    // USART_SendByte((val >> 8) & 0xFF);
-    // USART_SendByte((val >> 16) & 0xFF);
-    // USART_SendByte((val >> 24) & 0xFF);
-    // while (true) {}
-
     // Get ref value squared
     constexpr uint8_t reference_frequency_index = 1;
     uint32_t reference_value_squared = get_buffer_squared_value(filled_buffer, reference_frequency_index);
@@ -116,35 +136,20 @@ void loop()
     uint32_t first_limit = reference_value_squared / 36;
     uint32_t second_limit = reference_value_squared / 4;
     uint32_t third_limit = 25 * reference_value_squared / 36;
-    // Compute first value
-    constexpr uint8_t input_value_frequency_index = 3;
-    uint8_t input_value = 0;
-    for (uint8_t frequency_index = input_value_frequency_index; frequency_index < input_value_frequency_index + 4; ++frequency_index)
+    // Each value uses 4 consecutive frequencies, but are 5 frequencies apart
+    // There are 5 values to read, and first frequency starts at index 3
+    constexpr uint8_t frequency_index_start = 3;
+    constexpr uint8_t frequency_index_stride = 5;
+    constexpr uint8_t number_of_input_values = 5;
+    for (
+        uint8_t frequency_index = frequency_index_start;
+        frequency_index < frequency_index_start + frequency_index_stride * number_of_input_values;
+        frequency_index += frequency_index_stride)
     {
-        uint32_t frequency_value_squared = get_buffer_squared_value(filled_buffer, frequency_index);
-        input_value <<= 1;
-        if (frequency_value_squared > second_limit) {
-            input_value |= 1;
-            input_value <<= 1;
-            if (frequency_value_squared > third_limit) {
-                input_value |= 1;
-            }
-        } else {
-            input_value <<= 1;
-            if (frequency_value_squared > first_limit) {
-                input_value |= 1;
-            }
-        }
+        uint8_t input_value = get_input_value_from_spectrum(
+            frequency_index, filled_buffer, first_limit, second_limit, third_limit);
+        USART_SendByte(input_value);
     }
-    USART_SendByte(input_value);
-
-    // // Print the computed fft
-    // for (uint8_t sample_idx = 0; sample_idx < number_of_data_samples; ++sample_idx)
-    // {
-    //     USART_PrintInt16(filled_buffer[sample_idx]);
-    //     USART_PrintString(", ");
-    // }
-    // USART_PrintString("\n");
 }
 
 // ADC conversion done interrupt
