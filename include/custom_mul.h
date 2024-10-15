@@ -1,4 +1,5 @@
 #pragma once
+
 #include <stdint.h>
 
 // Compute floot((x * y) >> 16)

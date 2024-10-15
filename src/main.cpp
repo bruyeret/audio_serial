@@ -1,6 +1,8 @@
 #include "custom_mul.h"
 #include "unrolled_fft.h"
 #include "simple_uart.h"
+#include "decode_spectrum.h"
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
@@ -27,51 +29,6 @@ int16_t sample_buffer_1[number_of_data_samples];
 int16_t *volatile sample_buffer = sample_buffer_0;
 // Index of the next sample in the sample buffer
 volatile uint8_t sample_buffer_idx = 0;
-
-// Function used to compute squared magnitude of a frequency given buffer and frequency index
-
-inline uint32_t get_buffer_squared_value(int16_t *buffer, uint8_t frequency_index)
-{
-    uint8_t real_part_index = 2 * frequency_index;
-    uint8_t imag_part_index = real_part_index + 1;
-    return square(buffer[real_part_index]) + square(buffer[imag_part_index]);
-}
-
-// Get an 8 bit value from 4 consecutive frequencies in the input spectrum
-// frequency_index: the first frequency of the 4 consecutive frequencies holding the value
-// spectrum_buffer: the input spectrum [re0, im0, re1, im1, ...]
-// square_limit_1, square_limit_2, square_limit_3: square of the magnitudes used to get a single base 4 digit per frequency:
-//      - square_magnitude <= square_limit_1: frequency represents the digit 0
-//      - square_limit_1 < square_magnitude <= square_limit_2: frequency represents the digit 1
-//      - square_limit_2 < square_magnitude <= square_limit_3: frequency represents the digit 2
-//      - square_limit_3 < square_magnitude: frequency represents the digit 3
-inline uint8_t get_input_value_from_spectrum(uint8_t first_frequency_index, int16_t *spectrum_buffer, uint32_t square_limit_1, uint32_t square_limit_2, uint32_t square_limit_3)
-{
-    uint8_t input_value = 0;
-    for (uint8_t frequency_index = first_frequency_index; frequency_index < first_frequency_index + 4; ++frequency_index)
-    {
-        uint32_t frequency_value_squared = get_buffer_squared_value(spectrum_buffer, frequency_index);
-        input_value <<= 1;
-        if (frequency_value_squared > square_limit_2)
-        {
-            input_value |= 1;
-            input_value <<= 1;
-            if (frequency_value_squared > square_limit_3)
-            {
-                input_value |= 1;
-            }
-        }
-        else
-        {
-            input_value <<= 1;
-            if (frequency_value_squared > square_limit_1)
-            {
-                input_value |= 1;
-            }
-        }
-    }
-    return input_value;
-}
 
 inline void setup_timer0()
 {
@@ -130,26 +87,15 @@ void loop()
     // Compute fft
     approx_fft64(filled_buffer);
 
-    // Get ref value squared
-    constexpr uint8_t reference_frequency_index = 1;
-    uint32_t reference_value_squared = get_buffer_squared_value(filled_buffer, reference_frequency_index);
-    // Deduce limits
-    uint32_t first_limit = reference_value_squared / 36;
-    uint32_t second_limit = reference_value_squared / 4;
-    uint32_t third_limit = 25 * reference_value_squared / 36;
-    // Each value uses 4 consecutive frequencies, but are 5 frequencies apart
-    // There are 5 values to read, and first frequency starts at index 3
-    constexpr uint8_t frequency_index_start = 3;
-    constexpr uint8_t frequency_index_stride = 5;
-    constexpr uint8_t number_of_input_values = 5;
-    for (
-        uint8_t frequency_index = frequency_index_start;
-        frequency_index < frequency_index_start + frequency_index_stride * number_of_input_values;
-        frequency_index += frequency_index_stride)
+    // Now the buffer contains the spectrum, get values
+    constexpr uint8_t number_of_values = 6;
+    uint8_t values[number_of_values];
+    get_values_from_spectrum(filled_buffer, number_of_values, values);
+
+    // Only print the values without the CRC
+    for (uint8_t i = 0; i < 5; ++i)
     {
-        uint8_t input_value = get_input_value_from_spectrum(
-            frequency_index, filled_buffer, first_limit, second_limit, third_limit);
-        USART_SendByte(input_value);
+        USART_SendByte(values[i]);
     }
 }
 

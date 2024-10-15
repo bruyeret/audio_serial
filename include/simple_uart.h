@@ -1,8 +1,6 @@
 #pragma once
 
 #include <avr/io.h>
-#include <util/delay.h>
-#include <avr/interrupt.h>
 
 void USART_Init(uint32_t baud_rate)
 {
