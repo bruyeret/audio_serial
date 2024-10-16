@@ -2,6 +2,7 @@
 #include "unrolled_fft.h"
 #include "simple_uart.h"
 #include "decode_spectrum.h"
+#include "crc.h"
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -92,10 +93,10 @@ void loop()
     uint8_t values[number_of_values];
     get_values_from_spectrum(filled_buffer, number_of_values, values);
 
-    // Only print the values without the CRC
-    for (uint8_t i = 0; i < 5; ++i)
-    {
-        USART_SendByte(values[i]);
+    // Only print the first value when the CRC matches
+    uint8_t crc_remainder = get_crc8_remainder(values, number_of_values - 1, 0xCF);
+    if (crc_remainder == values[number_of_values - 1]) {
+        USART_SendByte(values[0]);
     }
 }
 

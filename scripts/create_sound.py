@@ -32,6 +32,32 @@ def play_audio(audio):
 def main_harmonics():
     play = True
 
+    # Create list of 5 values
+    values = [ord(letter) for letter in "Hello"]
+
+    # Compute crc remainder and add it to the values list
+    polynomial_normal = 0xCF
+    polynomial_bitstring = "1" + bin(polynomial_normal)[2:]
+
+    input_bitstring = ""
+    for value in values:
+        bin_rep = bin(value)[2:]
+        input_bitstring += "0" * (8 - len(bin_rep)) + bin_rep
+
+    # Computation of CRC taken from Wikipedia
+    len_input = len(input_bitstring)
+    initial_padding = (len(polynomial_bitstring) - 1) * "0"
+    input_padded_array = list(input_bitstring + initial_padding)
+    while '1' in input_padded_array[:len_input]:
+        cur_shift = input_padded_array.index('1')
+        for i in range(len(polynomial_bitstring)):
+            input_padded_array[cur_shift + i] = str(int(polynomial_bitstring[i] != input_padded_array[cur_shift + i]))
+
+    crc_remainder = int(''.join(input_padded_array)[len_input:], 2)
+
+    # Add crc remainder to values
+    values.append(crc_remainder)
+
     # Reference frequency (index 1, amplitude 3)
     frequencies = [1]
     amplitudes = [3]
@@ -39,11 +65,10 @@ def main_harmonics():
     # Constant that are shared with the arduino code
     frequency_index_start = 3
     frequency_index_stride = 5
-    number_of_input_values = 5
+    number_of_values = 6
 
     # Add input values frequencies and amplitudes
-    values = list(range(ord('A'), ord('A') + number_of_input_values))
-    assert(len(values) == number_of_input_values)
+    assert(len(values) == number_of_values)
     current_frequency = frequency_index_start
     for value in values:
         for i in range(3, -1, -1):
